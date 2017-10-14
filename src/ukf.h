@@ -67,6 +67,12 @@ public:
   ///* Sigma point spreading parameter
   double lambda_;
 
+  ///* NIS check for radar
+  double e_radar_;
+
+  ///* NIS check for lidar
+  double e_laser_;
+
 
   /**
    * Constructor
@@ -102,6 +108,58 @@ public:
    * @param meas_package The measurement at k+1
    */
   void UpdateRadar(MeasurementPackage meas_package);
+
+  /**
+   * Create augmented sigma points matrix
+   */
+  MatrixXd AugmentedSigmaPoints();
+
+  /**
+   * Create predicted sigma points matrix
+   * @param delta_t Time between k and k+1 in s
+   */
+  void SigmaPointsPrediction(double delta_t, const MatrixXd &Xsig_aug);
+
+  /**
+   * Predict radar measurements
+   * @param z_out predicted sigma points in measurement space
+   * @param S_out predicted measurement covariance matrix
+   */
+  void PredictRadarMeasurement(VectorXd* z_out, MatrixXd* S_out, MatrixXd* Zsig_out);
+
+  /**
+   * Predict lidar measurements
+   * @param z_out predicted measurement
+   * @param S_out predicted measurement covariance matrix   
+   */
+  void PredictLidarMeasurement(VectorXd* z_out, MatrixXd* S_out, MatrixXd* Zsig_out);
+
+  /**
+   * Common part used by both radar and lidar measurements
+   * @param n_z number of measurement states
+   * @param Zsig sigma points in measurement space
+   * @param z_pred predicted measurement
+   */
+  MatrixXd PredictMeasurementCommon(const int n_z, const MatrixXd &Zsig, const VectorXd &z_pred);
+
+  /**
+   * Update state mean and covaraince matrix
+   * @param n_z number of measurement states
+   * @param Zsig sigma points in measurement space
+   * @param z_pred predicted measurement
+   * @param S predicted measurment covariance matrix
+   * @param z ground truth incoming measurement
+   */
+  void UpdateStateCovariance(const int n_z,
+  	                         const MatrixXd &Zsig,
+  	                         const VectorXd &z_pred,
+	                         const MatrixXd &S,  	                         
+  	                         const VectorXd &z);
+
+  /**
+   * Consistency check using NIS
+   */
+  void CalculateNIS();
 };
 
 #endif /* UKF_H */
