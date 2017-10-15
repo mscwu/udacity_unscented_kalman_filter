@@ -70,7 +70,8 @@ UKF::UKF() {
   // Initial state covariance matrix
   P_ << 1, 0, 0, 0, 0,
         0, 1, 0, 0, 0,
-        0, 0, 1, 0, 1,
+        0, 0, 1, 0, 0,
+        0, 0, 0, 1, 0,
         0, 0, 0, 0, 1;
   // Time stamp
   time_us_ = 0.0;
@@ -145,11 +146,23 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
   // end debug
 
   if (meas_package.sensor_type_ == MeasurementPackage::RADAR && use_radar_) {
+    // begin debug
+    cout << "Received radar data..." << endl;
+    // end debug
+
   	UpdateRadar(meas_package);
   }
   else if (meas_package.sensor_type_ == MeasurementPackage::LASER && use_laser_) {
+    // begin debug
+    cout << "Received lidar data..." << endl;
+    // end debug
+
   	UpdateLidar(meas_package);
   }
+
+  // print the output
+  cout << "x_ = " << x_ << endl;
+  cout << "P_ = " << P_ << endl;
 
 }
 
@@ -181,9 +194,11 @@ void UKF::Prediction(double delta_t) {
 
   // Predict state mean
   VectorXd wt = weights_.transpose();
+  x_.fill(0.0);
   x_ = Xsig_pred_ * wt; 
   
   // Predict state covariance matrix
+  P_.fill(0.0);
   for (unsigned int i=0;i<2*n_aug_+1; ++i){
       VectorXd diff = Xsig_pred_.col(i) - x_;
       // normalize angle
@@ -220,8 +235,17 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
 
   // predicted measurement covariance matrix
   MatrixXd S = MatrixXd(n_z, n_z);
-  
+
+  // begin debug
+  cout << "Predicting lidar measurement..." << endl;
+  // end debug
+
   PredictLidarMeasurement(&z_pred, &S, &Zsig);
+
+  // begin debug
+  cout << "Updating state and state covariance..." << endl;
+  // end debug
+   
   UpdateStateCovariance(n_z, Zsig, z_pred, S, z);
 }
 
@@ -252,8 +276,17 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
 
   // predicted measurement covariance matrix
   MatrixXd S = MatrixXd(n_z, n_z);
-  
+
+  // begin debug
+  cout << "Predicting radar measurement..." << endl;
+  // end debug
+
   PredictRadarMeasurement(&z_pred, &S, &Zsig);
+
+  // begin debug
+  cout << "Updating state and state covariance..." << endl;
+  // end debug
+
   UpdateStateCovariance(n_z, Zsig, z_pred, S, z);
 }
 
@@ -349,10 +382,12 @@ void UKF::PredictRadarMeasurement(VectorXd* z_out, MatrixXd* S_out, MatrixXd* Zs
 
   // Predicted measurement mean
   VectorXd z_pred = VectorXd(n_z);
+  z_pred.fill(0.0);
   z_pred = Zsig * weights_; 
 
   // Predicted measurement covariance matrix S
   MatrixXd S = MatrixXd(n_z, n_z);
+  S.fill(0.0);
   S << PredictMeasurementCommon(n_z, Zsig, z_pred);
 
   // Measurement noise R
@@ -387,10 +422,12 @@ void UKF::PredictLidarMeasurement(VectorXd* z_out, MatrixXd* S_out, MatrixXd* Zs
 
   // Predicted measurement mean
   VectorXd z_pred = VectorXd(n_z);
+  z_pred.fill(0.0);
   z_pred = Zsig * weights_;
 
   // Predicted measurement covariance matrix S
   MatrixXd S = MatrixXd(n_z, n_z);
+  S.fill(0.0);
   S << PredictMeasurementCommon(n_z, Zsig, z_pred);
 
   // Measurement noise R
@@ -415,6 +452,7 @@ MatrixXd UKF::PredictMeasurementCommon(const int n_z,
 
   // Predicted measurement covariance matrix S
   MatrixXd S = MatrixXd(n_z, n_z);
+  S.fill(0.0);
 
   for (unsigned int i=0;i<2*n_aug_+1;++i) {
     VectorXd zdiff = Zsig.col(i) - z_pred;
@@ -435,23 +473,39 @@ void UKF::UpdateStateCovariance(const int n_z,
 	                              const MatrixXd &S,
 	                              const VectorXd &z) {
   // Calculate cross correlation matrix
+
+  // begin debug
+  cout << "Computing cross correlation matrix..." << endl;
+  // end debug
+
   MatrixXd Tc = MatrixXd(n_x_, n_z);	
+  Tc.fill(0.0);
   for (unsigned int i=0;i<2*n_aug_+1;++i) {
       VectorXd xdiff = Xsig_pred_.col(i) - x_;
       // normalize angle
-      while(xdiff(3)>M_PI) xdiff(1) -= 2. * M_PI;
-      while(xdiff(3)<-M_PI) xdiff(1) += 2. * M_PI;
+      while(xdiff(3)>M_PI) xdiff(3) -= 2. * M_PI;
+      while(xdiff(3)<-M_PI) xdiff(3) += 2. * M_PI;
       VectorXd zdiff = Zsig.col(i) - z_pred;
       while(zdiff(1)>M_PI) zdiff(1) -= 2. * M_PI;
       while(zdiff(1)<-M_PI) zdiff(1) += 2. * M_PI;      
       Tc += weights_(i) * xdiff * zdiff.transpose();
   }
-  //calculate Kalman gain K;
+  // calculate Kalman gain K;
+
+  // begin debug
+  cout << Tc << endl;
+  cout << "Computing kalman gain K..." << endl;
+  // end debug
+
   MatrixXd K = Tc * S.inverse();
   VectorXd zdiff = z - z_pred;
   while(zdiff(1)>M_PI) zdiff(1) -= 2. * M_PI;
-  while(zdiff(1)<-M_PI) zdiff(1) += 2. * M_PI;   
-  //update state mean and covariance matrix
+  while(zdiff(1)<-M_PI) zdiff(1) += 2. * M_PI;
+
+  // begin debug
+  cout << "Update state mean and covariance matrix..." << endl;
+  // end debug   
+  // update state mean and covariance matrix
   x_ += K * zdiff;
   P_ -= K * S * K.transpose();	
 }
