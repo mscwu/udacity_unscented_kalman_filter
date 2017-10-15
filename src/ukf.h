@@ -140,7 +140,9 @@ public:
    * @param Zsig sigma points in measurement space
    * @param z_pred predicted measurement
    */
-  MatrixXd PredictMeasurementCommon(const int n_z, const MatrixXd &Zsig, const VectorXd &z_pred);
+  MatrixXd PredictMeasurementCommon(const int n_z,
+  	                                const MatrixXd &Zsig,
+  	                                const VectorXd &z_pred);
 
   /**
    * Update state mean and covaraince matrix
@@ -158,8 +160,17 @@ public:
 
   /**
    * Consistency check using NIS
+   * @param meas_package current sensor measurement
+   * @param n_z dimension of sensor measurement
+   * @param z_pred prediceted measurement
+   * @param S measurement covariance
+   * @param e_out output NIS
    */
-  void CalculateNIS();
+  void CalculateNIS(MeasurementPackage meas_package,
+                    const int n_z,
+                    const VectorXd &z_pred,
+                    const MatrixXd &S,
+                    double* e_out);
 };
 
 #endif /* UKF_H */

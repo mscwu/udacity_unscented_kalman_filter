@@ -24,10 +24,10 @@ UKF::UKF() {
   P_ = MatrixXd(5, 5);
 
   // Process noise standard deviation longitudinal acceleration in m/s^2
-  std_a_ = 1.0;
+  std_a_ = 1.6;
 
   // Process noise standard deviation yaw acceleration in rad/s^2
-  std_yawdd_ = 0.2;
+  std_yawdd_ = 0.4;
 
   // Laser measurement noise standard deviation position1 in m
   std_laspx_ = 0.15;
@@ -68,13 +68,17 @@ UKF::UKF() {
   Xsig_pred_ = MatrixXd(n_x_, 2 * n_aug_ + 1);
 
   // Initial state covariance matrix
-  P_ << 1, 0, 0, 0, 0,
-        0, 1, 0, 0, 0,
-        0, 0, 1, 0, 0,
-        0, 0, 0, 1, 0,
-        0, 0, 0, 0, 1;
+  P_ << 0.03, 0, 0, 0, 0,
+        0, 0.03, 0, 0, 0,
+        0, 0, 0.2, 0, 0,
+        0, 0, 0, 0.02, 0,
+        0, 0, 0, 0, 0.02;
   // Time stamp
   time_us_ = 0.0;
+
+  // NIS
+  e_radar_ = 0.0;
+  e_laser_ = 0.0;
 
 }
 
@@ -102,7 +106,7 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
     cout << "Initializing..." << endl;
     // end debug
 
-  	x_ << 1, 1, 1, 1, 0.1;
+  	x_ << 5, 5, 1, 1, 0.1;
 
   	if (meas_package.sensor_type_ == MeasurementPackage::RADAR && use_radar_) {
   		/**
@@ -147,14 +151,14 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
 
   if (meas_package.sensor_type_ == MeasurementPackage::RADAR && use_radar_) {
     // begin debug
-    cout << "Received radar data..." << endl;
+    //cout << "Received radar data..." << endl;
     // end debug
 
   	UpdateRadar(meas_package);
   }
   else if (meas_package.sensor_type_ == MeasurementPackage::LASER && use_laser_) {
     // begin debug
-    cout << "Received lidar data..." << endl;
+    //cout << "Received lidar data..." << endl;
     // end debug
 
   	UpdateLidar(meas_package);
@@ -237,16 +241,20 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
   MatrixXd S = MatrixXd(n_z, n_z);
 
   // begin debug
-  cout << "Predicting lidar measurement..." << endl;
+  //cout << "Predicting lidar measurement..." << endl;
   // end debug
 
   PredictLidarMeasurement(&z_pred, &S, &Zsig);
 
   // begin debug
-  cout << "Updating state and state covariance..." << endl;
+  //cout << "Updating state and state covariance..." << endl;
   // end debug
    
   UpdateStateCovariance(n_z, Zsig, z_pred, S, z);
+  CalculateNIS(meas_package, n_z, z_pred, S, &e_laser_);
+
+  cout << "Lidar NIS: " << endl;
+  cout << e_laser_ << endl;
 }
 
 /**
@@ -278,16 +286,20 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
   MatrixXd S = MatrixXd(n_z, n_z);
 
   // begin debug
-  cout << "Predicting radar measurement..." << endl;
+  //cout << "Predicting radar measurement..." << endl;
   // end debug
 
   PredictRadarMeasurement(&z_pred, &S, &Zsig);
 
   // begin debug
-  cout << "Updating state and state covariance..." << endl;
+  //cout << "Updating state and state covariance..." << endl;
   // end debug
 
   UpdateStateCovariance(n_z, Zsig, z_pred, S, z);
+  CalculateNIS(meas_package, n_z, z_pred, S, &e_radar_);
+
+  cout << "Radar NIS: " << endl;
+  cout << e_radar_ << endl;
 }
 
 MatrixXd UKF::AugmentedSigmaPoints() {
@@ -475,7 +487,7 @@ void UKF::UpdateStateCovariance(const int n_z,
   // Calculate cross correlation matrix
 
   // begin debug
-  cout << "Computing cross correlation matrix..." << endl;
+  //cout << "Computing cross correlation matrix..." << endl;
   // end debug
 
   MatrixXd Tc = MatrixXd(n_x_, n_z);	
@@ -493,8 +505,8 @@ void UKF::UpdateStateCovariance(const int n_z,
   // calculate Kalman gain K;
 
   // begin debug
-  cout << Tc << endl;
-  cout << "Computing kalman gain K..." << endl;
+  //cout << Tc << endl;
+  //cout << "Computing kalman gain K..." << endl;
   // end debug
 
   MatrixXd K = Tc * S.inverse();
@@ -503,9 +515,27 @@ void UKF::UpdateStateCovariance(const int n_z,
   while(zdiff(1)<-M_PI) zdiff(1) += 2. * M_PI;
 
   // begin debug
-  cout << "Update state mean and covariance matrix..." << endl;
+  //cout << "Update state mean and covariance matrix..." << endl;
   // end debug   
   // update state mean and covariance matrix
   x_ += K * zdiff;
   P_ -= K * S * K.transpose();	
+}
+
+void UKF::CalculateNIS(MeasurementPackage meas_package,
+                       const int n_z,
+                       const VectorXd &z_pred,
+                       const MatrixXd &S,
+                       double* e_out) {
+  // begin debug
+  //cout << "Computing NIS..." << endl;
+  // end debug
+
+  VectorXd err_z = VectorXd(n_z);
+  err_z = meas_package.raw_measurements_ - z_pred;
+
+  double e = 0.0;
+  e = err_z.transpose() * S.inverse() * err_z;
+
+  *e_out = e;
 }
